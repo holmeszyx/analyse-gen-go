@@ -1,0 +1,44 @@
+
+# "Config" is the reserved word which to mark the env
+
+[Config]
+package="abc.e.f"
+dir= "./testdata"
+#author= "[Author name or empty]"
+#nameKey="nm"
+#typeKey="t"
+#commentKey="cm"
+
+# "Params" is the reserved word which to define the analyse sub params of a event
+# param=alias, the alias use to write this toml
+
+# the "c" is reserved word to param
+[Params]
+action="act"
+content="ct"
+
+
+# the events
+# [event_name]
+# c="the event comment"
+# act="the act params comment"
+# content=""    if comment is empty , ignore
+
+
+[home]
+c = "home"
+
+[login]
+c = "login"
+act = "which login action does"
+
+[click_it_once]
+c = "click it"
+act = "[1, 2, 3]"
+ct = "[x, y , z]"
+
+[ignore]
+
+[ignore2]
+c = ""
+act = "ignore 2"

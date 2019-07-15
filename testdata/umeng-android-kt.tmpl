@@ -1,0 +1,46 @@
+{{- if ne .Data.Config.Package "" -}} package {{.Data.Config.Package}} {{- end}}
+
+import android.content.Context
+import com.umeng.analytics.MobclickAgent
+
+/**
+ * Analyse
+ * Created by [als-gen] on {{.Date}}.
+ */
+object St {
+
+    private val context: Context
+        get() = application.getInstance()
+
+{{- with .Data.Events}}
+
+
+
+    // ================================
+    // Events count: {{ len . }}
+    // ================================
+
+
+{{ range . }}
+
+    {{- $count := len .Params -}}
+    {{- $funcName := toFuncName .Name }}
+    /**
+     * {{ .Comment }} {{ if gt $count 0}} {{ range .Params }}
+     * @param {{ .Name }} {{ .Comment }}  {{ end }}
+     {{- end }}
+     */
+    fun st{{firstCap $funcName }}( {{- if gt $count 0}} {{- range $index, $item := .Params }} {{- if gt $index 0}}, {{ end -}} {{ $item.Name }}: String {{- end -}} {{ end -}} ){
+        {{ if gt $count 0 -}}
+        val map: HashMap<String, String> = HashMap(4)
+        {{ range .Params -}}
+        map["{{.Name}}"] = {{.Name}}
+        {{ end }}
+        MobclickAgent.onEvent(context, "{{.Name}}", map)
+        {{- else -}}
+        MobclickAgent.onEvent(context, "{{.Name}}")
+        {{- end }}
+    }
+{{ end }}
+{{ end }}
+}
