@@ -3,6 +3,10 @@ package als_gen
 import (
 	"fmt"
 	"github.com/pelletier/go-toml"
+	"io/ioutil"
+	"math"
+	"os"
+	"sort"
 )
 
 const (
@@ -38,10 +42,31 @@ type Parser struct {
 }
 
 func (p *Parser) Parse(alsFile string) (*Als, error) {
-	alsConf, err := toml.LoadFile(alsFile)
+	alsContent, err := func(file string) (string, error) {
+		f, err := os.Open(file)
+		if err != nil {
+			return "", err
+		}
+		defer f.Close()
+		content, err := ioutil.ReadAll(f)
+		if err != nil {
+			return "", err
+		}
+		return string(content), nil
+	}(alsFile)
+
 	if err != nil {
 		return nil, err
 	}
+
+	alsConf, err := toml.Load(alsContent)
+	if err != nil {
+		return nil, err
+	}
+
+	// keep the tables and keys write order
+	order := &orderKeeper{}
+	order.parse(alsContent)
 
 	als := Als{
 		Events: make([]Event, 0, 16),
@@ -51,6 +76,7 @@ func (p *Parser) Parse(alsFile string) (*Als, error) {
 	confTree := alsConf.Get(KEY_CONFIG).(*toml.Tree)
 	if confTree != nil {
 		conf := als.Config
+		//todo nil handler
 		conf.Package = confTree.Get("package").(string)
 		conf.Dir = confTree.Get("dir").(string)
 		als.Config = conf
@@ -87,15 +113,40 @@ func (p *Parser) Parse(alsFile string) (*Als, error) {
 
 	// parse events
 	var eventKeys []string = make([]string, 0, 16)
-	for _, key := range alsConf.Keys() {
+	var paramsKeys []string = make([]string, 0, 8)
+	var paramsOrder map[string]int = make(map[string]int)
+
+	// use order.tableNames to instead of range alsConf.Keys()
+	for index := 0; index < len(order.tableNames); index++ {
+		table := order.tableNames[index]
+
+		key := table.Name
 		if key != KEY_CONFIG && key != KEY_Params {
 			eventKeys = append(eventKeys, key)
+		} else if key == KEY_Params {
+			// load params order list
+			start := table.Position
+			var end int32 = math.MaxInt32
+			if index != (len(order.tableNames) - 1) {
+				end = order.tableNames[index+1].Position
+			}
+
+			for pi := 0; pi < len(order.keyNames); pi++ {
+				theKey := order.keyNames[pi]
+				if theKey.Position > start && theKey.Position < end {
+					paramsOrder[theKey.Name] = len(paramsKeys)
+					paramsKeys = append(paramsKeys, theKey.Name)
+				}
+			}
+
 		}
 	}
 
 	for _, key := range eventKeys {
-		eve := alsConf.Get(key).(*toml.Tree)
-		c := eve.Get(KEY_EVENT_COMMENT)
+		// parse properties of each event
+
+		evp := alsConf.Get(key).(*toml.Tree)
+		c := evp.Get(KEY_EVENT_COMMENT)
 		if c == nil || (c.(string) == "") {
 			// ignore
 			fmt.Printf("The event(%s) not have comment(c). ignore it.. \n", key)
@@ -106,19 +157,40 @@ func (p *Parser) Parse(alsFile string) (*Als, error) {
 			Params: make([]Field, 0, 4),
 		}
 		event.Name = key
-		for _, p := range eve.Keys() {
+
+		for _, p := range evp.Keys() {
 			if p == KEY_EVENT_COMMENT {
-				event.Comment = eve.Get(p).(string)
+				event.Comment = evp.Get(p).(string)
 			} else {
 				// params
 				if paramName, ok := aliasMap(p); ok {
 					event.Params = append(event.Params, Field{
 						Name:    paramName,
-						Comment: eve.Get(p).(string),
+						Comment: evp.Get(p).(string),
 					})
 				}
 			}
 		}
+		if len(event.Params) > 0 {
+			// sort with the written order
+			sort.Slice(event.Params, func(i, j int) bool {
+				pi := event.Params[i].Name
+				pj := event.Params[j].Name
+
+				oi := math.MaxInt32
+				oj := math.MaxInt32
+
+				if o, ok := paramsOrder[pi]; ok {
+					oi = o
+				}
+				if o, ok := paramsOrder[pj]; ok {
+					oj = o
+				}
+
+				return oi < oj
+			})
+		}
+
 		als.Events = append(als.Events, event)
 	}
 
