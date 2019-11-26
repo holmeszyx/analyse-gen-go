@@ -1,6 +1,7 @@
 package als_gen
 
 import (
+	"bytes"
 	"strings"
 	"text/template"
 	"unicode"
@@ -21,8 +22,9 @@ type ExportEntity struct {
 func GetTmplFuncMap() template.FuncMap {
 
 	funcMap := template.FuncMap{
-		"firstCap": FirstCap,
+		"firstCap":   FirstCap,
 		"toFuncName": ToFuncName,
+		"safeHan":    SafeHan,
 	}
 
 	return funcMap
@@ -52,4 +54,26 @@ func ToFuncName(name string) string {
 		}
 	}
 	return string(finalData)
+}
+
+// SafeHan Only "number", "chinese", "_-.+".
+// others replace with '_'
+func SafeHan(text string) string {
+	if text == "" {
+		return text
+	}
+
+	runeText := []rune(text)
+	finalData := bytes.NewBuffer(make([]byte, 0, len(text)))
+	for _, r := range runeText {
+		if unicode.IsNumber(r) ||
+			unicode.IsLetter(r) ||
+			unicode.Is(unicode.Han, r) ||
+			r == '-' || r == '_' || r == '.' || r == '+' {
+			finalData.WriteRune(r)
+		} else {
+			finalData.WriteRune('_')
+		}
+	}
+	return finalData.String()
 }
